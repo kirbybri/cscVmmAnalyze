@@ -6,6 +6,7 @@ import time
 import os
 import pickle
 
+#BEGIN CSC_BINARY CLASS
 class CSC_BINARY(object):
 
     #__INIT__#
@@ -25,6 +26,7 @@ class CSC_BINARY(object):
 
         print("GET DATA")
         self.getData()
+        #print("DUMP DATA")
         #self.dumpData()
         print("FIND HEADERS")
         self.findHeaders()
@@ -43,7 +45,7 @@ class CSC_BINARY(object):
         isFile = os.path.isfile(self.inputFileName) 
         if isFile == False:
             print("Could not find input file, quitting")
-            return
+            return None
         #put binary data into memory
         self.input_file = open(self.inputFileName,'rb')
         self.fileContent = self.input_file.read()     
@@ -53,37 +55,39 @@ class CSC_BINARY(object):
         for pos in range(0, len(self.fileContent), 4):
             #note need to assume network byte ordering
             line = struct.unpack('!I', self.fileContent[pos:pos+4])
-            if len(line) != 1:
+            if len(line) != 1:	
                 print("getData: error parsing input file, quitting")
-                return
+                return None
             data = line[0]
             self.fileArray.append(data)        
+        return None
+
 
     def dumpData(self):
         if len(self.fileArray) == None:
-            return
+            return None
 
         #loop over input file 4 bytes at a time, look for packet header words
         for lineNum in range(0,len(self.fileArray),1):
             line = self.fileArray[lineNum]
             print(lineNum,"\t",hex(line))
-
             if lineNum > 100 :
                 break
+        return None
+
 
     def findHeaders(self):
         if len(self.fileArray) == None:
-            return
+            return None
 
         #loop over input file 4 bytes at a time, look for packet header words
         foundFirstPacket = False
         #for lineNum in range(0,len(self.fileArray),1):
-        for lineNum in range(1,len(self.fileArray)-3,1):
+        for lineNum in range(1,len(self.fileArray)-3,1): #note offset from beginning and eof
             line = self.fileArray[lineNum]
             #check for header field, add to list
             if (line & 0xFFFFFF) == self.headerWord :
-                #possible header word, check for header structure
-                #check if header values make sense
+                #possible header word, check for header structure and values
                 prevFooter = (self.fileArray[lineNum-1] & 0xFFFFFFFF)
                 boardId = (self.fileArray[lineNum] & 0xFF000000) >> 24
                 triggerCount = (self.fileArray[lineNum+2] & 0xFFFFFFFF)
@@ -110,13 +114,12 @@ class CSC_BINARY(object):
                 #have a good header at this point
                 foundFirstPacket = True
                 self.headerPosList.append(lineNum)
-                #if self.debug == True :
-                #    print("findHeaders: found header at line ",lineNum)                      
+        return None
 
 
     def checkPackets(self):
         if len(self.headerPosList) == 0 :
-            return
+            return None
 
         #loop through list of headers, find footer word, check if packet is OK
         for headerNum in range(0, len(self.headerPosList), 1):
@@ -127,7 +130,6 @@ class CSC_BINARY(object):
             lineNum = headerPos + 1
             while lineNum < len(self.fileArray) : #note,loop to end of file
                 line = self.fileArray[lineNum]
-                #print(hex(line))
             
                 #check for footer field, add to list
                 if line == self.footerWord :
@@ -147,35 +149,31 @@ class CSC_BINARY(object):
 
             #have a good packet here
             self.packetPosList.append([headerPos,footerPos])
-            #if self.debug == True :
-            #    print("checkPackets: found packet at headerNum ",headerNum,"\theaderPos",headerPos,"\tfooterPos",footerPos)
-        if self.debug == True :
-            print("checkPackets: number of packets found ", len(self.packetPosList), "\tnumber headers detected ",len(self.headerPosList))
+        return None
 
 
     def parsePackets(self):
         if self.fileContent == None or len(self.packetPosList) == 0 :
-            return
+            return None
 
         #loop through packets, get hit info
         for packetNum in range(0, len(self.packetPosList), 1):
+            if packetNum % 10000 == 0 :
+                print("parsePackets: processing packet number ",packetNum,"\ttotal ",len(self.packetPosList))
             headerPos = self.packetPosList[packetNum][0]
             footerPos = self.packetPosList[packetNum][1]
 
             #do some safety checks
             if headerPos < 0 or headerPos >= len(self.fileArray) :
                 print("parsePackets: bad packet, skip")
+                continue
             if footerPos < 0 or footerPos >= len(self.fileArray) :
                 print("parsePackets: bad packet, skip")
-           
+                continue
+
             boardId = (self.fileArray[headerPos] & 0xFF000000) >> 24
             triggerCount = (self.fileArray[headerPos+2] & 0xFFFFFFFF)
             triggerBcid = (self.fileArray[headerPos+3] & 0xFFFF00) >> 8
-            #if self.debug == True :
-            #    print("boardId\t",boardId,"\ttriggerCount\t", triggerCount)
-
-            #if triggerCount > 10000 :
-            #    continue
 
             #loop over hit info
             hitList = []
@@ -202,25 +200,17 @@ class CSC_BINARY(object):
                     print("parsePackets: Unexpected channel number, skipping")
                     continue
 
-                #filter hits here
+                #filter hits by time here
                 #if trigTime < -4 or trigTime > -1: #cosmic
-                #if trigTime < -5 or trigTime > 10: #cosmic
                 if trigTime < -10 or trigTime > 50: #cosmic
                         continue
                 hitList.append([vmm_channel,pdo,tdo,trigTime]) #add what's necessary
-                #if self.debug == True :
-                #    print("\tvmm_channel",vmm_channel,"\tpdo ", pdo,"\ttdo ",tdo)
 
-            #if self.debug == True :
-            #        print("\tNumber hits found ",len(hitList) )
-
-            #add hits to trigger container
-            #if triggerCount not in self.allTrigs:
-            #    self.allTrigs[triggerCount] = []
-            #self.allTrigs[triggerCount].append([boardId,triggerBcid,hitList])
+            #add hits to trigger container, organize by board
             if boardId not in self.allTrigs:
                self.allTrigs[boardId] = []
             self.allTrigs[boardId].append([triggerCount,triggerBcid,hitList])
+        return None
 
 
     def decodeGray(self,bin_list):
@@ -247,24 +237,21 @@ class CSC_BINARY(object):
                 trigBcid = trig[1]
                 hits = trig[2]
                 numHits = len(hits)
-                #if numHits == 0 :
-                #    continue
                 print("\tBoard ID ",boardId,"\tTrig count ",trigCount,"\t# of Hits ",numHits)
-                #for hit in hits :
-                #    print("\t\tChan # ",hit[0],"\tPDO ",hit[1],"\tTime ", hit[2])
-
+                for hit in hits :
+                    print("\t\tChan # ",hit[0],"\tPDO ",hit[1],"\tTime ", hit[2])
+        return None
 
     def outputData(self):
         with open("output_processCscBinaryData_board.pkl", 'wb') as f:
             pickle.dump(self.allTrigs, f,2)
-
+        return None
 #END CSC_BINARY CLASS
 
 def main():
-
     if len(sys.argv) != 2 :
         print("processCscBinary_board: need to provide input file name")
-        return
+        return None
     fileName = sys.argv[1]
     cscBinaryData = CSC_BINARY(fileName)
 

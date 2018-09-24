@@ -21,10 +21,6 @@ class CSC_ANALYZE(object):
         self.getData()
         #self.checkData()
         self.checkTriggers()
-        #self.analyzeData_trigDiff()
-        #self.analyzeData_trigDist()
-        #self.analyzeData_checkCorr()
-        #self.analyzeData_selectTrack()
         self.outputData()
 
     def getData(self):
@@ -35,6 +31,8 @@ class CSC_ANALYZE(object):
             return
         with open(self.inputFileName, 'rb') as f:
             self.allTrigs = pickle.load(f)  
+        return None
+
 
     def checkData(self):
         if self.allTrigs == None :
@@ -65,10 +63,12 @@ class CSC_ANALYZE(object):
                     tdo = hit[2]
                     trigTime = hit[3]
                     print("\t\tChan # " + str(hit[0]) + "\tPDO " + str(hit[1]) + "\tTime " + str(hit[2]) + "\tTrig Time " + str(hit[3]) )
+        return None
+
 
     def checkTriggers(self):
         if self.allTrigs == None :
-            return
+            return None
         numBoards = len(self.allTrigs)
 
         #determine the number of triggers in each board
@@ -79,7 +79,6 @@ class CSC_ANALYZE(object):
             numTrigs = len(boardTrigs)
             if numTrigs < minNumTrigs :
                 minNumTrigs = numTrigs
-        print(minNumTrigs)
 
         #need to determine first trigger for each board
         minTrig = {}
@@ -88,7 +87,7 @@ class CSC_ANALYZE(object):
         for key in self.allTrigs:
             boardId = int(key)
             if boardId not in minTrig:
-               minTrig[boardId] = 100000000
+               minTrig[boardId] = 1000000000
             else:
                print("checkTriggers: ERROR, repeated key in dictionry self.allTrigs, exit")
             if boardId not in maxTrig:
@@ -104,7 +103,6 @@ class CSC_ANALYZE(object):
             for trigNum in range (0,numTrigs,1):
                 trig = boardTrigs[trigNum]
                 trigCount = trig[0]
-                trigBcid = trig[1]
                 if (boardId not in maxTrig) or (boardId not in minTrig):
                     print("checkTriggers: ERROR, key not found, WEIRD")
                 if trigCount < minTrig[boardId] :
@@ -113,16 +111,15 @@ class CSC_ANALYZE(object):
                     maxTrig[boardId] = trigCount
 
         #require minimum triggers to agree between boards
-        minTrigVal = list(minTrig.values())[0]       
-        if all(value == minTrigVal for value in minTrig.values()) == False:
-            print("checkTriggers: ERROR, repeated key in dictionry self.allTrigs, exit")
-            return
+        minTrigVal = list(minTrig.values())[0]
+        #if all(value == minTrigVal for value in minTrig.values()) == False:
+        #    print("checkTriggers: ERROR, repeated key in dictionry self.allTrigs, exit")
+        #    return None
 
         #check if minimum triggers are compatible
         minTrigVals = []
         for key in minTrig:
             minTrigVals.append(minTrig[key])
-        print( minTrigVals )
 
         trigListOffset = {}
         for key in self.allTrigs:
@@ -139,15 +136,12 @@ class CSC_ANALYZE(object):
             prevTrigBcid[boardId] = trigBcid
 
         #loop through triggers, note starting at trigger number 1
-        #for trigNum in range(0,minNumTrigs,1):
         trigNum = -1
+        missedTriggerCount = 0
         goodTriggerCount = 0
-        while trigNum < minNumTrigs-10:
+        while trigNum < minNumTrigs-5:
             trigNum = trigNum + 1
             print("\tTRIG NUM ",trigNum)
-
-            #if trigNum > 10000 :
-            #    break
 
             #loop over boards, check if trigger values consistent
             boardTrigDiffs = {}
@@ -158,19 +152,17 @@ class CSC_ANALYZE(object):
                 offset = trigListOffset[boardId]
                 currTrigNum = trigNum + offset
                 if currTrigNum >= len(boardTrigs) :
-                    print("Ran out of data, ending")
+                    print("checkTriggers: Ran out of data, ending")
                     isOverflow = True
                     continue
                 boardTrig = boardTrigs[currTrigNum]
                 trigCount = boardTrig[0]
                 trigBcid = boardTrig[1]
-                trigHits = boardTrig[2]
                 trigDiff = trigBcid - prevTrigBcid[boardId]
                 if trigDiff < 0 :
                     trigDiff = 4095 + trigDiff
                 print("\tBoard ID ",boardId,"\ttrigBcid ",trigBcid,"\tprevTrigBcid " , prevTrigBcid[boardId],"\ttrigDiff ", trigDiff)
                 boardTrigDiffs[boardId] = trigDiff
-
                 #update prev trigger variable
                 prevTrigBcid[boardId] = trigBcid
 
@@ -185,11 +177,8 @@ class CSC_ANALYZE(object):
                 #print("SKIP TRIG NUM ",trigNum,"\tboardTrigDiff ",boardTrigDiffs)
                 continue
 
-            #print("\t",boardTrigDiffs)
             #calculate RMS of various trigger differences
-            #meanMinTrig = np.mean(np.array(minTrigVals))
-            #minTrigRms = np.sqrt(np.mean( (np.array(minTrigVals)-meanMinTrig )**2 ))
-            boardTrigDiffRms = np.std( list(boardTrigDiffs.values()) , ddof=1)
+            boardTrigDiffRms = np.std( list(boardTrigDiffs.values()) , ddof=0)
             if boardTrigDiffRms < 50 :
                 #GOOD TRIGGER HERE, SAVE
                 for key in self.allTrigs:
@@ -198,46 +187,79 @@ class CSC_ANALYZE(object):
                     offset = trigListOffset[boardId]
                     currTrigNum = trigNum + offset
                     if currTrigNum >= len(boardTrigs) :
-                        print("Ran out of data, ending")
+                        print("checkTriggers: Ran out of data, ending")
                         isOverflow = True
                         continue
                     boardTrig = boardTrigs[currTrigNum]
                     #add to relevant container
                     if goodTriggerCount not in self.goodTrigs:
                         self.goodTrigs[goodTriggerCount] = []
-                    self.goodTrigs[goodTriggerCount].append([boardId,boardTrig])
+                    self.goodTrigs[goodTriggerCount].append([boardId,boardTrigDiffs[boardId],boardTrig])
                 goodTriggerCount = goodTriggerCount + 1
                 continue
             print("BAD TRIGGER TRIG NUM ",trigNum,"\tboardTrigDiffRms",boardTrigDiffRms)
-
-            #if trigNum > 2800 :
-            #    continue
-            #continue
+            missedTriggerCount = missedTriggerCount + 1
 
             #detected a skipped trigger here, try to identify bad boards
-            print(boardTrigDiffs)
+            """
+            #print(boardTrigDiffs)
             badBoards = []
             for key in boardTrigDiffs:
                 #get copy of dictionary recording trigger BCID diffs WITHOUT entry from specified board
                 boardId = int(key)
-                #print("EXCLUDE ",boardId)
+                #print("\tEXCLUDE ",boardId)
                 truncatedDiff = {x: boardTrigDiffs[x] for x in boardTrigDiffs if x != boardId }
                 #print("\t",truncatedDiff)
-                truncatedTrigDiffRms = np.std( list(truncatedDiff.values()) , ddof=1)
-                #print("\t",truncatedTrigDiffRms)
-                if truncatedTrigDiffRms < boardTrigDiffRms - 200 :
+                truncatedTrigDiffRms = np.std( list(truncatedDiff.values()) , ddof=0)
+                print("\ttruncatedTrigDiffRms ",truncatedTrigDiffRms,"\tboardTrigDiffRms ", boardTrigDiffRms)
+                if truncatedTrigDiffRms < boardTrigDiffRms - 50 :
                     #print("BAD BOARD ",boardId)
                     #identified a bad board, try to increment it trigger offset to recover
                     badBoards.append(boardId)
                     trigListOffset[boardId] = trigListOffset[boardId] - 1
+            print("badBoards",badBoards)
+            #if can't identify a bad board, try a guess?
+            if len( badBoards ) == 0 :
+                badBoards.append(list(boardTrigDiffs.keys())[0])
+            if len(list(boardTrigDiffs.keys())) > 1 :
+                badBoards.append(list(boardTrigDiffs.keys())[1])
+
+            numBoards = len(self.allTrigs)
+            if numBoards - len( badBoards ) < 2 :
+                print("too few good boards, try skipping")
+                continue
+            """
+            badBoards = []
+            boards1 = []
+            boards2 = []
+            firstBoardId = list(boardTrigDiffs.keys())[0]
+            firstBoard_trigDiff = boardTrigDiffs[firstBoardId]
+            boards1.append(firstBoardId)
+            
+            for key in boardTrigDiffs:
+                boardId = int(key)
+                if boardId == firstBoardId :
+                    continue
+                trigDiff = boardTrigDiffs[boardId]
+                if trigDiff - firstBoard_trigDiff > -50 and trigDiff - firstBoard_trigDiff < 50 :
+                    boards1.append(boardId)
+                else:
+                    boards2.append(boardId)
+            
+            badBoards = boards1
+            if len(boards2) < len(badBoards):
+                badBoards = boards2
+            #print(boards1,"\t",boards2,"\t",firstBoardId)
+            #print( badBoards )
 
             #test difference trigger offsets to see if board recovered
-            trigNum = trigNum + 3
+            trigNum = trigNum + 5
+            newBoardOffsets = {}
             for testBoard in badBoards:
                 print("\tBAD BOARD ",testBoard)
                 minRms = boardTrigDiffRms
-                minTestOffset = 10
-                for testOffset in range(-15,14,1):
+                minTestOffset = 15
+                for testOffset in range(-5,5,1):
                     #print("\t\tTEST OFFSET ",testOffset)
 
                     #reset prevBCID dictionary
@@ -247,6 +269,8 @@ class CSC_ANALYZE(object):
                         offset = trigListOffset[boardId]
                         if boardId == testBoard :
                             offset = offset + testOffset
+                        elif boardId in badBoards :
+                            continue
                         currTrigNum = trigNum + offset
                         if currTrigNum >= len(boardTrigs) :
                             #print("WEIRD")
@@ -266,6 +290,8 @@ class CSC_ANALYZE(object):
                         offset = trigListOffset[boardId]
                         if boardId == testBoard :
                             offset = offset + testOffset
+                        elif boardId in badBoards :
+                            continue
                         currTrigNum = testTrigNum + offset
                         if currTrigNum >= len(boardTrigs) :
                             print("WEIRD")
@@ -279,16 +305,28 @@ class CSC_ANALYZE(object):
                             trigDiff = 4095 + trigDiff
                         #print("\t\t\tTEST Board ID ",boardId,"\ttrigBcid ",trigBcid,"\tprevTrigBcid " , prevTrigBcid[boardId],"\ttrigDiff ", trigDiff)
                         testBoardTrigDiffs[boardId] = trigDiff
-                    #
-                    testBoardTrigDiffRms = np.std( list(testBoardTrigDiffs.values()) , ddof=1)
+
+                    #check if RMS improves
+                    testBoardTrigDiffRms = np.std( list(testBoardTrigDiffs.values()) , ddof=0)
                     if testBoardTrigDiffRms < minRms :
                         minTestOffset = testOffset
                         minRms = testBoardTrigDiffRms
-                    #print("\t\t\tTEST TRIG DIFF RMS ",testBoardTrigDiffRms)
+                    print("\t\tTEST OFFSET ",testOffset,"\tTEST TRIG DIFF RMS ",testBoardTrigDiffRms)
                 
-                if minTestOffset < 15 :
-                    trigListOffset[testBoard] = trigListOffset[testBoard] + minTestOffset
-            #print("\t\t",boardTrigDiffRms)
+                print("\tTEST Board ID ",testBoard,"\tboardTrigDiffRms ", boardTrigDiffRms,"\tminRms ",minRms,"\tminTestOffset ",minTestOffset)
+                #if minTestOffset < 15  :
+                if minTestOffset < 15 and minRms < boardTrigDiffRms - 200 :
+                    #trigListOffset[testBoard] = trigListOffset[testBoard] + minTestOffset
+                    #print("Trig num ", trigNum,"\tminTestOffset",minTestOffset)
+                    newBoardOffsets[testBoard] = minTestOffset
+
+            #if trigNum > 80000 :
+            #    break
+
+            #apply new offsets
+            for testBoard in newBoardOffsets :
+                trigListOffset[testBoard] = trigListOffset[testBoard] + newBoardOffsets[testBoard]
+
             #reset prevBCID dictionary
             for key in self.allTrigs:
                 boardId = int(key)
@@ -296,20 +334,22 @@ class CSC_ANALYZE(object):
                 offset = trigListOffset[boardId]
                 currTrigNum = trigNum + offset
                 if currTrigNum >= len(boardTrigs) :
-                    #print("WEIRD")
                     continue
                 boardTrig = boardTrigs[currTrigNum]
                 trigCount = boardTrig[0]
                 trigBcid = boardTrig[1]
                 prevTrigBcid[boardId] = trigBcid
-                
+
+        print("goodTriggerCount ",goodTriggerCount,"\tmissedTriggerCount ",missedTriggerCount)
+        return None                
     #end check Triggers         
 
     def outputData(self):
         with open("output_analyzeCscHitData_board_goodTrigs.pkl", 'wb') as f:
             pickle.dump(self.goodTrigs, f,2)
-
+        return None
 #END CSC_ANALYZE CLASS
+
 
 def main():
 
