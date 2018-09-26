@@ -1,8 +1,6 @@
 import struct
 import sys 
 import string
-import socket
-import time
 import os
 import pickle
 
@@ -10,37 +8,26 @@ import pickle
 class CSC_BINARY(object):
 
     #__INIT__#
-    def __init__(self,inputFileName):
+    def __init__(self,inputFileName=None):
         self.inputFileName = inputFileName
         self.inputFile = None
         self.fileContent = None
         self.fileArray = []
         self.headerPosList = []
         self.packetPosList = []
-        self.allTrigs = {}
-        self.debug = True
+        self.allBoards = {}
+        self.debug = False
+        self.outputFileName = "output_processCscBinaryData_board.pkl"
 
         #constants
         self.headerWord = 0x00a8c0
         self.footerWord = 0xffffffff
 
-        print("GET DATA")
-        self.getData()
-        #print("DUMP DATA")
-        #self.dumpData()
-        print("FIND HEADERS")
-        self.findHeaders()
-        print("CHECK PACKETS")
-        self.checkPackets()
-        print("PARSE PACKETS")
-        self.parsePackets()
-        #print("CHECK EVENTS")
-        #self.checkData()
-        print("OUTPUT EVENTS")
-        self.outputData()
-
 
     def getData(self):
+        if self.inputFileName == None:
+            print("Could not find input file name, quitting")
+            return None
         #check if data exists
         isFile = os.path.isfile(self.inputFileName) 
         if isFile == False:
@@ -207,9 +194,9 @@ class CSC_BINARY(object):
                 hitList.append([vmm_channel,pdo,tdo,trigTime]) #add what's necessary
 
             #add hits to trigger container, organize by board
-            if boardId not in self.allTrigs:
-               self.allTrigs[boardId] = []
-            self.allTrigs[boardId].append([triggerCount,triggerBcid,hitList])
+            if boardId not in self.allBoards:
+               self.allBoards[boardId] = []
+            self.allBoards[boardId].append([triggerCount,triggerBcid,hitList])
         return None
 
 
@@ -224,10 +211,9 @@ class CSC_BINARY(object):
 
 
     def checkData(self):
-        numBoards = len(self.allTrigs)
-        for key in self.allTrigs:
-            boardId = int(key)
-            boardTrigs = self.allTrigs[key]
+        numBoards = len(self.allBoards)
+        for boardId in self.allBoards:
+            boardTrigs = self.allBoards[boardId]
             numTrigs = len(boardTrigs)
 
             #loop over triggers, print hit info
@@ -239,21 +225,36 @@ class CSC_BINARY(object):
                 numHits = len(hits)
                 print("\tBoard ID ",boardId,"\tTrig count ",trigCount,"\t# of Hits ",numHits)
                 for hit in hits :
-                    print("\t\tChan # ",hit[0],"\tPDO ",hit[1],"\tTime ", hit[2])
+                    print("\t\tChan # ",hit[0],"\tPDO ",hit[1],"\tTime ", hit[2],"\tTrig Time ", hit[3])
         return None
 
     def outputData(self):
         with open("output_processCscBinaryData_board.pkl", 'wb') as f:
-            pickle.dump(self.allTrigs, f,2)
+            pickle.dump(self.allBoards, f,2)
         return None
 #END CSC_BINARY CLASS
 
 def main():
     if len(sys.argv) != 2 :
-        print("processCscBinary_board: need to provide input file name")
+        print("processCscBinaryData_board: need to provide input file name")
         return None
     fileName = sys.argv[1]
     cscBinaryData = CSC_BINARY(fileName)
+
+    print("GET DATA")
+    cscBinaryData.getData()
+    #print("DUMP DATA")
+    #cscBinaryData.dumpData()
+    print("FIND HEADERS")
+    cscBinaryData.findHeaders()
+    print("CHECK PACKETS")
+    cscBinaryData.checkPackets()
+    print("PARSE PACKETS")
+    cscBinaryData.parsePackets()
+    #print("CHECK EVENTS")
+    #cscBinaryData.checkData()
+    print("OUTPUT EVENTS")
+    cscBinaryData.outputData()
 
 if __name__ == '__main__':
     main()
