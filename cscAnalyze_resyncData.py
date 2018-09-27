@@ -73,6 +73,7 @@ class CSC_ANALYZE_RESYNC(object):
             return None
         if len(self.allBoards) == 0:
             return None
+        numBoards = len(self.allBoards)
 
         #determine the number of triggers in each board
         minNumTrigs = self.getMinNumTriggers()
@@ -107,11 +108,11 @@ class CSC_ANALYZE_RESYNC(object):
             #boardTrigDiffRms = np.std( list(boardTrigDiffs.values()) , ddof=0)
             boardTrigDiffRms = self.calcStd(boardTrigDiffs)
             if boardTrigDiffRms == None :
-                continue
-            if boardTrigDiffRms < self.constant_maxGoodRms :
+                boardTrigDiffRms = 0
+            if (boardTrigDiffRms < self.constant_maxGoodRms) or (numBoards == 1) :
                 #good event, save to output container
                 self.saveSyncedEvent(trigNum,boardTrigDiffs)
-            else :
+            elif boardTrigDiffRms >= self.constant_maxGoodRms :
                 #detected a skipped trigger here, skip ahead, identify bad boards and try recovery
                 print("\tBAD TRIGGER TRIG NUM ",trigNum,"\tboardTrigDiffRms ",boardTrigDiffRms)
                 missedTriggerCount = missedTriggerCount + 1
