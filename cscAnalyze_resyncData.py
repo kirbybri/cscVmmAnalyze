@@ -20,7 +20,7 @@ class CSC_ANALYZE_RESYNC(object):
         #constants
         self.constant_maxTimeDiff = 50
         self.constant_maxGoodRms = 50
-        self.constant_recoverNumSkip = 5
+        self.constant_recoverNumSkip = 2
         self.constant_recoverTestRange = 5
         self.constant_minRmsDiff = 200
 
@@ -90,9 +90,8 @@ class CSC_ANALYZE_RESYNC(object):
             trigNum = trigNum + 1
             if trigNum % 1000 == 0 :
                 print("TRIG NUM ",trigNum)
+            #get trigger differences, require valid number for each board
             prevTrigBcid = self.updatePrevTrigBcid(trigNum-1) #note trigger # offset!
-
-            #loop over boards, get trigger differences, require valid number for each board
             boardTrigDiffs = self.updateBoardTrigDiffs(trigNum,prevTrigBcid)
             if boardTrigDiffs == None :
                 continue
