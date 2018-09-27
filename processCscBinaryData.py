@@ -96,8 +96,8 @@ class CSC_BINARY(object):
                     continue
 
                 #require valid board ID
-                if boardId < 100 or boardId > 105 :
-                    continue
+                #if boardId < 100 or boardId > 105 :
+                #    continue
                 
                 #require valid VMM ID
                 if vmm_id != 0 :
@@ -214,7 +214,7 @@ class CSC_BINARY(object):
             #add hits to trigger container
             if triggerCount not in self.allTrigs:
                 self.allTrigs[triggerCount] = []
-            self.allTrigs[triggerCount].append([boardId,hitList])
+            self.allTrigs[triggerCount].append([boardId,triggerBcid,hitList])
 
 
     def decodeGray(self,bin_list):
@@ -239,7 +239,7 @@ class CSC_BINARY(object):
             continue
             for board in allBoards:
                 boardId = board[0]
-                hits = board[1]
+                hits = board[2]
                 numHits = len(hits)
                 #if numHits == 0 :
                 #    continue

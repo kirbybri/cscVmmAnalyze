@@ -25,6 +25,7 @@ class CSC_ANALYZE(object):
         #constants
 
         self.getData()
+        self.plotAll()
         #self.analyzeData_checkData()
         #self.analyzeData_checkCorr()
         #self.analyzeData_goodEvents()
@@ -34,7 +35,8 @@ class CSC_ANALYZE(object):
         #self.analyzeData_checkChDist()
         #self.analyzeData_coincDist()
         #self.analyzeData_checkEff_layer()
-        self.analyzeData_posEff()
+        #self.analyzeData_posEff()
+        #self.analyzeData_goodEvents_qDist()
 
     def getData(self):
         #check if data exists
@@ -76,6 +78,49 @@ class CSC_ANALYZE(object):
                     tdo = hit[2]
                     trigTime = hit[3]
                     #print("\t\tChan # ",ch,"\tPDO ",pdo,"\tTDO ",tdo,"\tTrig Time ", trigTime )
+
+    def plotAll(self):
+        if self.allTrigs == None :
+            return
+
+        xPlot = []
+
+        for key in self.allTrigs:
+            trigNum = key
+            boardList = self.allTrigs[key]
+            for boardInfo in boardList:
+                if len(boardInfo) != 3 :
+                    print("WEIRD")
+                    continue
+                boardId = boardInfo[0]
+                boardTrigDiff = boardInfo[1]
+                boardData = boardInfo[2]
+                if len(boardData) != 3 :
+                    print("WEIRD")
+                trigCount = boardData[0]
+                trigBCID = boardData[1]
+                hits = boardData[2]
+                for hit in hits:
+                    if len(hit) != 4 :
+                        print("WEIRD")
+                    ch = hit[0]
+                    pdo = hit[1]
+                    tdo = hit[2]
+                    trigTime = hit[3]
+                    xPlot.append(trigTime)
+
+        #results
+        fig = plt.figure()
+
+        plt.hist(xPlot, 100, facecolor='g')
+        plt.xlabel("")
+        plt.ylabel("")
+
+        #plt.plot()
+        plt.show()
+        #plt.savefig("output_plotAll.png")
+
+        return None
 
     def analyzeData_getGoodHitPos(self,boardList=None):
         if self.allTrigs == None :
@@ -877,6 +922,101 @@ class CSC_ANALYZE(object):
         #plt.colorbar()
         #plt.xlabel("Ch #")
         #plt.ylabel("Ch #")
+
+        plt.show()
+
+    def analyzeData_goodEvents_qDist(self):
+        if self.allTrigs == None :
+            return
+
+        totalTrig = 0
+        totalGood = 0
+
+        qDist_all = []
+        qDist_prompt = []
+        qDist_late = []
+
+        for key in self.allTrigs:
+            trigNum = key
+            boardList = self.allTrigs[key]
+
+            #get good hits
+            goodBoardHitPos = self.analyzeData_getGoodHitPos(boardList)
+            if goodBoardHitPos == None :
+                continue
+            totalTrig = totalTrig + 1
+
+            #select good event
+            isGoodEvent = True
+            reqBoards = [100,101,102,103,104,105]
+            for board in reqBoards :
+                #does event have hit in required layer
+                if board not in goodBoardHitPos:
+                    isGoodEvent = False
+                    continue
+                #position cuts
+                if goodBoardHitPos[board] < 10 :
+                    isGoodEvent = False
+                if goodBoardHitPos[board] > 53 :
+                    isGoodEvent = False
+            if isGoodEvent == False:
+                continue
+
+            #try straight line cut
+            diff_x = 0
+            diff_y = 0
+            if (100 in goodBoardHitPos) and (102 in goodBoardHitPos) and (104 in goodBoardHitPos) :
+                pred_x = -0.46*goodBoardHitPos[100] + 1.43*goodBoardHitPos[102] + 1.1
+                diff_x = goodBoardHitPos[104] - pred_x
+            if (101 in goodBoardHitPos) and (103 in goodBoardHitPos) and (105 in goodBoardHitPos) :
+                pred_y = -0.47*goodBoardHitPos[101] + 1.45*goodBoardHitPos[103] + 0.1
+                diff_y = goodBoardHitPos[105] - pred_y           
+            if diff_x < -5 or diff_x > 5 :
+                continue
+            if diff_y < -5 or diff_y > 5 :
+                continue
+
+            #good event here
+            totalGood = totalGood + 1
+            for boardInfo in boardList:
+                if len(boardInfo) != 3 :
+                    print("WEIRD")
+                    continue
+                boardId = boardInfo[0]
+                boardTrigDiff = boardInfo[1]
+                boardData = boardInfo[2]
+                if len(boardData) != 3 :
+                    print("WEIRD")
+                trigCount = boardData[0]
+                trigBCID = boardData[1]
+                hits = boardData[2]
+                #print("\tboardId ",boardId,"\tTrig Count ", trigCount, "\tTrig BCID ", trigBCID,"\tTrig Diff ",boardTrigDiff)
+                for hit in hits:
+                    if len(hit) != 4 :
+                        print("WEIRD")
+                    ch = hit[0]
+                    pdo = hit[1]
+                    tdo = hit[2]
+                    trigTime = hit[3]
+
+                    if trigTime < -4 or trigTime > 30 :
+                        continue
+
+                    qDist_all.append(pdo)
+                    if trigTime >= -4 and trigTime <= 0 :
+                        qDist_prompt.append(pdo)
+                    if trigTime > 0 and trigTime <= 30 :
+                        qDist_late.append(pdo)
+                    #print("\t\tChan # ",ch,"\tPDO ",pdo,"\tTDO ",tdo,"\tTrig Time ", trigTime )
+
+        #results
+        print("Total trig ",totalTrig,"\tTotal good ",totalGood)
+        fig = plt.figure()
+
+        plt.hist(qDist_prompt, 100, facecolor='g')
+        plt.hist(qDist_late, 100, facecolor='r')
+        plt.xlabel("Charge (ADC)")
+        plt.ylabel("Number of Hits")
 
         plt.show()
 
