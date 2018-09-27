@@ -17,15 +17,15 @@ from scipy.stats import norm
 class CSC_ANALYZE(object):
 
     #__INIT__#
-    def __init__(self,inputFileName):
+    def __init__(self,inputFileName=None):
         self.inputFileName = inputFileName
         self.inputFile = None
         self.allTrigs = None
 
         #constants
 
-        self.getData()
-        self.plotAll()
+        #self.getData()
+        #self.plotAll()
         #self.analyzeData_checkData()
         #self.analyzeData_checkCorr()
         #self.analyzeData_goodEvents()
@@ -84,6 +84,7 @@ class CSC_ANALYZE(object):
             return
 
         xPlot = []
+        yPlot = []
 
         for key in self.allTrigs:
             trigNum = key
@@ -99,6 +100,7 @@ class CSC_ANALYZE(object):
                     print("WEIRD")
                 trigCount = boardData[0]
                 trigBCID = boardData[1]
+                #xPlot.append(trigBCID)
                 hits = boardData[2]
                 for hit in hits:
                     if len(hit) != 4 :
@@ -108,13 +110,20 @@ class CSC_ANALYZE(object):
                     tdo = hit[2]
                     trigTime = hit[3]
                     xPlot.append(trigTime)
+                    yPlot.append(pdo)
 
         #results
         fig = plt.figure()
 
+        plt.subplot(2, 1, 1)
         plt.hist(xPlot, 100, facecolor='g')
-        plt.xlabel("")
-        plt.ylabel("")
+        plt.xlabel("Hit Time - Trigger Tim")
+        plt.ylabel("Number of Hits")
+
+        plt.subplot(2, 1, 2)
+        plt.hist(yPlot, 100, facecolor='g')
+        plt.xlabel("PDO (ADC)")
+        plt.ylabel("Number of Hits")
 
         #plt.plot()
         plt.show()
@@ -1025,7 +1034,7 @@ class CSC_ANALYZE(object):
 def main():
 
     if len(sys.argv) != 2 :
-        print("processCscAnalyze: need to provide input file name")
+        print("cscAnalyze_analyzeSyncedData: need to provide input file name")
         return
     fileName = sys.argv[1]
     cscAnalyzeData = CSC_ANALYZE(fileName)
