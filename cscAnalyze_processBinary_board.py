@@ -22,6 +22,7 @@ class CSC_ANALYZE_BINARY(object):
         #constants
         self.headerWord = 0x00a8c0
         self.footerWord = 0xffffffff
+        self.doFilterHits = True
 
 
     def getData(self):
@@ -190,7 +191,7 @@ class CSC_ANALYZE_BINARY(object):
 
                 #filter hits by time here
                 #if trigTime < -4 or trigTime > -1: #cosmic
-                if trigTime < -50 or trigTime > 50: #cosmic
+                if self.doFilterHits == True and (trigTime < -50 or trigTime > 50): #cosmic
                         continue
                 hitList.append([vmm_channel,pdo,tdo,trigTime]) #add what's necessary
 

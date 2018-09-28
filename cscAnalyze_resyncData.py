@@ -51,7 +51,7 @@ class CSC_ANALYZE_RESYNC(object):
             print( "Board ID ",boardId, "\tNumber of Triggers ", numTrigs )
             #for trig in boardTrigs:
             for trigNum in range (0,numTrigs,1):
-                if trigNum > 10 :
+                if trigNum > 10:
                     break
                 trig = boardTrigs[trigNum]
                 trigCount = trig[0]
@@ -59,6 +59,7 @@ class CSC_ANALYZE_RESYNC(object):
                 hits = trig[2]
                 numHits = len(hits)
                 print("\tBoard ID ",boardId,"\tTrig counter ",trigCount,"\t# of Hits ",numHits)
+                continue
                 for hit in hits :
                     ch = hit[0]
                     pdo = hit[1]
@@ -90,6 +91,7 @@ class CSC_ANALYZE_RESYNC(object):
         while trigNum < minNumTrigs-self.constant_recoverNumSkip:
             trigNum = trigNum + 1
             if trigNum % 1000 == 0 :
+            #if True :
                 print("TRIG NUM ",trigNum)
             #get trigger differences, require valid number for each board
             prevTrigBcid = self.updatePrevTrigBcid(trigNum-1) #note trigger # offset!
@@ -98,14 +100,7 @@ class CSC_ANALYZE_RESYNC(object):
                 continue
             if all( value != None for value in boardTrigDiffs.values() ) == False:
                 continue
-            #ignore events were trigger difference is too close to "wrap around" at 0 and 4095, maybe can save in future
-            if all( value > 10 for value in boardTrigDiffs.values() ) == False:
-                continue
-            if all( value < 4085 for value in boardTrigDiffs.values()) == False:
-                continue
-
-            #calculate RMS of various trigger differences
-            #boardTrigDiffRms = np.std( list(boardTrigDiffs.values()) , ddof=0)
+            #calculate trigger difference RMS, use to identify missed triggers
             boardTrigDiffRms = self.calcStd(boardTrigDiffs)
             if boardTrigDiffRms == None :
                 boardTrigDiffRms = 0
@@ -114,11 +109,14 @@ class CSC_ANALYZE_RESYNC(object):
                 self.saveSyncedEvent(trigNum,boardTrigDiffs)
             elif boardTrigDiffRms >= self.constant_maxGoodRms :
                 #detected a skipped trigger here, skip ahead, identify bad boards and try recovery
-                print("\tBAD TRIGGER TRIG NUM ",trigNum,"\tboardTrigDiffRms ",boardTrigDiffRms)
                 missedTriggerCount = missedTriggerCount + 1
                 trigNum = trigNum + self.constant_recoverNumSkip
                 badBoards = self.getBadBoards(boardTrigDiffs)
                 self.recoverBoards(trigNum,badBoards,boardTrigDiffRms)
+                print("BAD TRIGGER TRIG NUM ",trigNum,"\tboardTrigDiffRms ",boardTrigDiffRms,"\tBAD BOARDS ",badBoards)
+                for boardId in boardTrigDiffs :
+                    print("\tBoard ",boardId,"\tDIFF ",boardTrigDiffs[boardId])
+                #print("\tTRIG DIFFs ",boardTrigDiffs)
 
         print("goodTriggerCount ",self.goodTriggerCount,"\tmissedTriggerCount ",missedTriggerCount)
         return None                
@@ -225,7 +223,8 @@ class CSC_ANALYZE_RESYNC(object):
             trigDiff = trigBcid - prevTrigBcid[boardId]
             if trigDiff < 0 :
                 trigDiff = 4095 + trigDiff
-            #print("\tBoard ID ",boardId,"\ttrigBcid ",trigBcid,"\tprevTrigBcid " , prevTrigBcid[boardId],"\ttrigDiff ", trigDiff)
+            #if testBoard == None :
+            #    print("\tBoard ID ",boardId,"\ttrigBcid ",trigBcid,"\tprevTrigBcid " , prevTrigBcid[boardId],"\ttrigDiff ", trigDiff)
             boardTrigDiffs[boardId] = trigDiff
         return boardTrigDiffs
 
@@ -282,7 +281,6 @@ class CSC_ANALYZE_RESYNC(object):
                     continue
 
                 #check if RMS improves
-                #testBoardTrigDiffRms = np.std( list(testBoardTrigDiffs.values()) , ddof=0)
                 testBoardTrigDiffRms = self.calcStd(testBoardTrigDiffs)
                 if testBoardTrigDiffRms == None :
                     continue
@@ -311,8 +309,18 @@ class CSC_ANALYZE_RESYNC(object):
         if all( value != None for value in vals ) == False:
             return None
 
-        mean = sum(vals) / len(vals)
-        var  = sum(pow(value-mean,2) for value in vals) / len(vals)
+        corrVals = vals
+        if all( value < 4050 for value in vals ) == False:
+            corrVals = []
+            for val in vals:
+                if val < 2050 :
+                    corrVals.append(val)
+                else :
+                    corrVals.append(val - 4096)
+
+        mean = sum(corrVals) / len(vals)
+        var  = sum(pow(value-mean,2) for value in corrVals) / len(corrVals)
+
         if var < 0:
             return None
         std  = math.sqrt(var)
