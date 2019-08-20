@@ -25,7 +25,8 @@ class CSC_BINARY(object):
 
         print("GET DATA")
         self.getData()
-        #self.dumpData()
+        print("DUMP HEADERS")
+        self.dumpData()
         print("FIND HEADERS")
         self.findHeaders()
         print("CHECK PACKETS")
@@ -68,8 +69,8 @@ class CSC_BINARY(object):
             line = self.fileArray[lineNum]
             print(lineNum,"\t",hex(line))
 
-            if lineNum > 100 :
-                break
+            #if lineNum > 100 :
+            #    break
 
     def findHeaders(self):
         if len(self.fileArray) == None:

@@ -16,6 +16,7 @@ class CSC_ANALYZE_RESYNC(object):
         self.trigListOffset = {}
         self.outputFileName = "output_cscAnalyze_resyncData.pkl"
         self.goodTriggerCount = 0
+        self.doResync = False
 
         #constants
         self.constant_maxTimeDiff = 50
@@ -51,14 +52,14 @@ class CSC_ANALYZE_RESYNC(object):
             print( "Board ID ",boardId, "\tNumber of Triggers ", numTrigs )
             #for trig in boardTrigs:
             for trigNum in range (0,numTrigs,1):
-                if trigNum > 10:
+                if trigNum > 2:
                     break
                 trig = boardTrigs[trigNum]
                 trigCount = trig[0]
                 trigBcid = trig[1]
                 hits = trig[2]
                 numHits = len(hits)
-                print("\tBoard ID ",boardId,"\tTrig counter ",trigCount,"\t# of Hits ",numHits)
+                print("\tBoard ID ",boardId,"\tTrig counter ",trigCount,"\tTrig BCID ",trigBcid,"\t# of Hits ",numHits)
                 continue
                 for hit in hits :
                     ch = hit[0]
@@ -104,7 +105,7 @@ class CSC_ANALYZE_RESYNC(object):
             boardTrigDiffRms = self.calcStd(boardTrigDiffs)
             if boardTrigDiffRms == None :
                 boardTrigDiffRms = 0
-            if (boardTrigDiffRms < self.constant_maxGoodRms) or (numBoards == 1) :
+            if (boardTrigDiffRms < self.constant_maxGoodRms) or (numBoards == 1) or (self.doResync == False):
                 #good event, save to output container
                 self.saveSyncedEvent(trigNum,boardTrigDiffs)
             elif boardTrigDiffRms >= self.constant_maxGoodRms :

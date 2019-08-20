@@ -16,13 +16,13 @@ class CSC_ANALYZE_BINARY(object):
         self.headerPosList = []
         self.packetPosList = []
         self.allBoards = {}
-        self.debug = False
+        self.debug = True
         self.outputFileName = "output_cscAnalyze_processBinary_board.pkl"
 
         #constants
         self.headerWord = 0x00a8c0
         self.footerWord = 0xffffffff
-        self.doFilterHits = True
+        self.doFilterHits = False
 
 
     def getData(self):
@@ -59,8 +59,8 @@ class CSC_ANALYZE_BINARY(object):
         for lineNum in range(0,len(self.fileArray),1):
             line = self.fileArray[lineNum]
             print(lineNum,"\t",hex(line))
-            if lineNum > 100 :
-                break
+            #if lineNum > 100 :
+            #    break
         return None
 
 
@@ -89,7 +89,7 @@ class CSC_ANALYZE_BINARY(object):
 
                 #require valid board ID
                 #if boardId < 100 or boardId > 105 :
-                if boardId < 100  :
+                if boardId < 0 or boardId > 255 :
                     continue
                 
                 #require valid VMM ID
@@ -191,7 +191,7 @@ class CSC_ANALYZE_BINARY(object):
 
                 #filter hits by time here
                 #if trigTime < -4 or trigTime > -1: #cosmic
-                if self.doFilterHits == True and (trigTime < -50 or trigTime > 50): #cosmic
+                if self.doFilterHits == True and (trigTime < -100 or trigTime > 100): #cosmic
                         continue
                 hitList.append([vmm_channel,pdo,tdo,trigTime]) #add what's necessary
 
@@ -245,8 +245,8 @@ def main():
 
     print("GET DATA")
     cscBinaryData.getData()
-    #print("DUMP DATA")
-    #cscBinaryData.dumpData()
+    print("DUMP DATA")
+    cscBinaryData.dumpData()
     print("FIND HEADERS")
     cscBinaryData.findHeaders()
     print("CHECK PACKETS")

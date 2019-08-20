@@ -23,9 +23,15 @@ class CSC_ANALYZE(object):
         self.allTrigs = None
 
         #constants
+        self.allBoards = [100,101,102,103,104,105,106,107]
+        #self.allBoards = [100,107]
+        self.constant_lowHitTdc = -10
+        self.constant_highHitTdc = 25
 
-        #self.getData()
+        self.getData()
         #self.plotAll()
+        self.plotGood()
+        #self.checkTimeSpread()
         #self.analyzeData_checkData()
         #self.analyzeData_checkCorr()
         #self.analyzeData_goodEvents()
@@ -69,7 +75,7 @@ class CSC_ANALYZE(object):
                 trigBCID = boardData[1]
                 hits = boardData[2]
                 print("\tboardId ",boardId,"\tTrig Count ", trigCount, "\tTrig BCID ", trigBCID,"\tTrig Diff ",boardTrigDiff)
-                continue
+                #continue
                 for hit in hits:
                     if len(hit) != 4 :
                         print("WEIRD")
@@ -77,7 +83,7 @@ class CSC_ANALYZE(object):
                     pdo = hit[1]
                     tdo = hit[2]
                     trigTime = hit[3]
-                    #print("\t\tChan # ",ch,"\tPDO ",pdo,"\tTDO ",tdo,"\tTrig Time ", trigTime )
+                    print("\t\tChan # ",ch,"\tPDO ",pdo,"\tTDO ",tdo,"\tTrig Time ", trigTime )
 
     def plotAll(self):
         if self.allTrigs == None :
@@ -116,7 +122,8 @@ class CSC_ANALYZE(object):
         fig = plt.figure()
 
         plt.subplot(2, 1, 1)
-        plt.hist(xPlot, 100, facecolor='g')
+        #plt.hist(xPlot, 100, facecolor='g')
+        plt.hist(xPlot, range(-25,50,1), facecolor='g')
         plt.xlabel("Hit Time - Trigger Tim")
         plt.ylabel("Number of Hits")
 
@@ -127,7 +134,7 @@ class CSC_ANALYZE(object):
 
         #plt.plot()
         plt.show()
-        #plt.savefig("output_plotAll.png")
+        plt.savefig("output_plotAll.png")
 
         return None
 
@@ -162,7 +169,8 @@ class CSC_ANALYZE(object):
                 trigTime = hit[3]
                 #if trigTime < -4 or trigTime > 0 : #cosmic
                 #if trigTime < -4 or trigTime > 20 :
-                if trigTime < -4 or trigTime > 30 : # very wide
+                #if trigTime < -4 or trigTime > 30 : # very wide
+                if trigTime < self.constant_lowHitTdc or trigTime > self.constant_highHitTdc : # very wide
                     continue
                 #good hit here
                 if boardId not in goodBoardHits:
@@ -172,16 +180,154 @@ class CSC_ANALYZE(object):
         #require "good" hits
         goodBoardHitPos = {}
         for board in goodBoardHits:
+            #cut for up to 3 adjacent hits
             if len(goodBoardHits[board]) == 0 or len(goodBoardHits[board]) > 3 :
+            #if len(goodBoardHits[board]) == 0 :
                 continue
             if len(goodBoardHits[board]) == 1 :
                 goodBoardHitPos[board] = goodBoardHits[board][0]
                 continue
             chRms = np.std( goodBoardHits[board] , ddof=1)
+            #RMS cut for 3 adjacent hits
             if chRms > 1.5 :
                 continue
             goodBoardHitPos[board] = np.mean(goodBoardHits[board])
         return goodBoardHitPos
+
+    def analyzeData_getGoodHits(self,boardList=None):
+        if self.allTrigs == None :
+            return None
+        if boardList == None :
+            return None
+        if len(boardList) == 0 :
+            return None
+
+        #boardList = self.allTrigs[key]
+        tempBoardHits = {}
+        for boardInfo in boardList:
+            if len(boardInfo) != 3 :
+                continue
+            boardId = boardInfo[0]
+            boardTrigDiff = boardInfo[1]
+            boardData = boardInfo[2]
+            if len(boardData) != 3 :
+                continue
+            trigCount = boardData[0]
+            trigBCID = boardData[1]
+            hits = boardData[2]
+            numHits = len(hits)
+            for hit in hits:
+                if len(hit) != 4 :
+                    continue
+                ch = hit[0]
+                pdo = hit[1]
+                tdo = hit[2]
+                trigTime = hit[3]
+                if trigTime < self.constant_lowHitTdc or trigTime > self.constant_highHitTdc : # very wide
+                    continue
+                #good hit here
+                if boardId not in tempBoardHits:
+                    tempBoardHits[boardId] = []
+                tempBoardHits[boardId].append([ch,trigTime,pdo])
+            
+        #require "good" hits
+        goodBoardHits = {}
+        for boardId in tempBoardHits:
+            #cut for up to 3 adjacent hits
+            tempHits = tempBoardHits[boardId]
+            if len(tempHits) == 0 or len(tempHits) > 3 :
+                continue
+            if len(tempHits) == 1 :
+                goodBoardHits[boardId] = tempHits
+                continue
+            chList = []
+            for hit in tempHits :
+                chList.append(hit[0])
+            chRms = np.std( chList , ddof=1)
+            #RMS cut for 3 adjacent hits
+            if (len(chList) == 2) and (chRms > 0.8):
+                continue
+            if (len(chList) == 3) and (chRms > 1.2):
+                continue
+            goodBoardHits[boardId] = tempHits
+        return goodBoardHits
+
+    
+    def getHitPos(self,goodHits = None):
+        if goodHits == None :
+            return None
+        if len(goodHits) == 0 :
+            return None
+
+        tempHitPos = []
+        for hit in goodHits :
+            ch = hit[0]
+            tempHitPos.append(ch)
+        hitPos = np.mean(tempHitPos)
+        return hitPos
+
+
+    def plotGood(self):
+        if self.allTrigs == None :
+            return
+
+        xPlot = []
+        yPlot = []
+        totalTrig = 0
+        totalGood = 0
+
+        for trigNum in self.allTrigs:
+            boardList = self.allTrigs[trigNum]
+
+            #get good hits
+            goodBoardHits = self.analyzeData_getGoodHits(boardList)
+            if goodBoardHits == None :
+                continue
+            totalTrig = totalTrig + 1
+
+            #select good event
+            print("TRIG NUM ", trigNum)
+            for boardId in goodBoardHits :
+                goodHits = goodBoardHits[boardId]
+                print("\tBoard ",boardId)
+                #print("\t\t",goodHits)
+                hitPos = self.getHitPos(goodHits)
+                if hitPos == None :
+                    print("\t\tINVALID POS")
+                    continue
+                #print("\t\tPos ",hitPos)
+                numHits = len(goodHits)
+                if numHits != 3 :
+                    continue
+                for hit in goodHits :
+                    #print("\t\t",hit)
+                    ch = hit[0]
+                    trigTime = hit[1]
+                    pdo = hit[2]
+                    xPlot.append(trigTime)
+                    yPlot.append(pdo)
+
+        #results
+        print("Total trig ",totalTrig,"\tTotal good ",totalGood)
+        fig = plt.figure()
+
+        #plt.plot(xPlot, yPlot, 'o', color='black')
+        plt.subplot(2, 1, 1)
+        #plt.hist(xPlot, 100, facecolor='g')
+        plt.hist(xPlot, range(-25,50,1), facecolor='g')
+        plt.xlabel("Hit Time - Trigger Tim")
+        plt.ylabel("Number of Hits")
+
+        plt.subplot(2, 1, 2)
+        plt.hist(yPlot, 100, facecolor='g')
+        plt.xlabel("PDO (ADC)")
+        plt.ylabel("Number of Hits")
+
+        #plt.plot()
+        plt.show()
+        plt.savefig("output_plotAll.png")
+
+        return None
 
             
     def analyzeData_checkCorr(self):
@@ -307,17 +453,17 @@ class CSC_ANALYZE(object):
 
             #select good event
             isGoodEvent = True
-            reqBoards = [100,101,102,103,104,105]
+            reqBoards = self.allBoards
             for board in reqBoards :
                 #does event have hit in required layer
                 if board not in goodBoardHitPos:
                     isGoodEvent = False
                     continue
                 #position cuts
-                if goodBoardHitPos[board] < 10 :
-                    isGoodEvent = False
-                if goodBoardHitPos[board] > 53 :
-                    isGoodEvent = False
+                #if goodBoardHitPos[board] < 10 :
+                #    isGoodEvent = False
+                #if goodBoardHitPos[board] > 53 :
+                #    isGoodEvent = False
             if isGoodEvent == False:
                 continue
 
@@ -337,6 +483,7 @@ class CSC_ANALYZE(object):
 
             #good event here
             totalGood = totalGood + 1
+            print("Good event, trigger ",trigNum)
             continue
             for boardInfo in boardList:
                 if len(boardInfo) != 3 :
@@ -347,6 +494,7 @@ class CSC_ANALYZE(object):
                 boardData = boardInfo[2]
                 if len(boardData) != 3 :
                     print("WEIRD")
+
                 trigCount = boardData[0]
                 trigBCID = boardData[1]
                 hits = boardData[2]
@@ -388,7 +536,8 @@ class CSC_ANALYZE(object):
 
             #select good event
             isGoodEvent = True
-            reqBoards = [100,101,102,103,104,105]
+            #reqBoards = [100,101,102,103,104,105]
+            reqBoards = [100,101,102,103]
             for board in reqBoards :
                 #does event have hit in required layer
                 if board not in goodBoardHitPos:
@@ -403,29 +552,48 @@ class CSC_ANALYZE(object):
                 continue
 
             #try straight line cut
-            diff_x = 0
-            diff_y = 0
+            diff_x = None
+            diff_y = None
             if (100 in goodBoardHitPos) and (102 in goodBoardHitPos) and (104 in goodBoardHitPos) :
                 pred_x = -0.46*goodBoardHitPos[100] + 1.43*goodBoardHitPos[102] + 1.1
                 diff_x = goodBoardHitPos[104] - pred_x
             if (101 in goodBoardHitPos) and (103 in goodBoardHitPos) and (105 in goodBoardHitPos) :
                 pred_y = -0.47*goodBoardHitPos[101] + 1.45*goodBoardHitPos[103] + 0.1
                 diff_y = goodBoardHitPos[105] - pred_y           
-            if diff_x < -5 or diff_x > 5 :
-                continue
-            if diff_y < -5 or diff_y > 5 :
-                continue
+            #if diff_x < -5 or diff_x > 5 :
+            #    continue
+            #if diff_y < -5 or diff_y > 5 :
+            #    continue
 
-            diffPlot_x.append( diff_x )
-            diffPlot_y.append( diff_y )
+            if diff_x != None:
+                diffPlot_x.append( diff_x )
+            if diff_y != None:
+                diffPlot_y.append( diff_y )
 
-        (mu, sigma) = norm.fit(diffPlot_y)
-        print(mu,"\t",sigma)
+        #(mu, sigma) = norm.fit(diffPlot_y)
+        #print(mu,"\t",sigma)
+        print("Total trig ",totalTrig,"\tTotal 104 ",len(diffPlot_x),"\tTotal 105 ",len(diffPlot_y))
 
-        print("Total trig ",totalTrig,"\tTotal good ",totalGood)
-        fig = plt.figure()
-        plt.hist(diffPlot_y, range(-10,10,1), density=True, facecolor='g', alpha=0.75)      
-        plt.show()
+        fig = plt.figure(num=None, figsize=(8, 6), dpi=80)
+
+        plt.subplot(2, 1, 1)
+        #plt.hist(diffPlot_x, 100, facecolor='g')
+        plt.hist(diffPlot_x, range(-64,64,1), facecolor='g')
+        plt.xlabel("Board 104 Pos - Pred Pos (ch)")
+        plt.ylabel("Number of Hits")
+
+        plt.subplot(2, 1, 2)
+        plt.hist(diffPlot_y, range(-64,64,1), facecolor='g')
+        plt.xlabel("Board 105 Pos - Pred Pos (ch)")
+        plt.ylabel("Number of Hits")
+         
+        #plt.plot()
+        #plt.show()
+        plt.savefig("output_checkPosReg.png")
+
+        #fig = plt.figure()
+        #plt.hist(diffPlot_y, range(-10,10,1), density=True, facecolor='g', alpha=0.75)      
+        #plt.show()
 
     def analyzeData_checkChDist(self):
         if self.allTrigs == None :
@@ -436,6 +604,8 @@ class CSC_ANALYZE(object):
         self.analyzeData_checkChDist_board(103)
         self.analyzeData_checkChDist_board(104)
         self.analyzeData_checkChDist_board(105)
+        self.analyzeData_checkChDist_board(106)
+        self.analyzeData_checkChDist_board(107)
 
 
     def analyzeData_checkChDist_board(self, testBoard = None):
@@ -460,7 +630,7 @@ class CSC_ANALYZE(object):
 
             #select good event
             isGoodEvent = True
-            reqBoards = [100,101,102,103,104,105]
+            reqBoards = self.allBoards
             for board in reqBoards :
                 #does event have hit in required layer
                 if board not in goodBoardHitPos:
@@ -543,7 +713,8 @@ class CSC_ANALYZE(object):
         self.analyzeData_checkEff_board(103)
         self.analyzeData_checkEff_board(104)
         self.analyzeData_checkEff_board(105)
-
+        self.analyzeData_checkEff_board(106)
+        self.analyzeData_checkEff_board(107)
 
     def analyzeData_checkEff_board(self,testBoard = None):
         if self.allTrigs == None :
@@ -558,31 +729,29 @@ class CSC_ANALYZE(object):
         yPlot = []
         zPlot = []
 
-        #testBoard = 102
-
-        for key in self.allTrigs:
-            trigNum = key
-            boardList = self.allTrigs[key]
+        for trigNum in self.allTrigs:
+            boardList = self.allTrigs[trigNum]
 
             #get good hits
-            goodBoardHitPos = self.analyzeData_getGoodHitPos(boardList)
-            if goodBoardHitPos == None :
+            goodBoardHits = self.analyzeData_getGoodHits(boardList)
+            if goodBoardHits == None :
                 continue
 
             #select good event
             isGoodEvent = True
-            reqBoards = [100,101,102,103,104,105]
+            reqBoards = self.allBoards
             for board in reqBoards :
                 #does event have hit in required layer
                 if board == testBoard :
                     continue
-                if board not in goodBoardHitPos:
+                if board not in goodBoardHits:
                     isGoodEvent = False
                     continue
                 #position cuts
-                if goodBoardHitPos[board] < 10 :
+                print(goodBoardHits[board])
+                if self.getHitPos( goodBoardHits[board] ) < 10 :
                     isGoodEvent = False
-                if goodBoardHitPos[board] > 53 :
+                if self.getHitPos( goodBoardHits[board] ) > 53 :
                     isGoodEvent = False
             if isGoodEvent == False:
                 continue
@@ -590,19 +759,19 @@ class CSC_ANALYZE(object):
             #try straight line cut
             diff_x = 0
             diff_y = 0
-            if (100 in goodBoardHitPos) and (102 in goodBoardHitPos) and (104 in goodBoardHitPos) :
-                pred_x = -0.46*goodBoardHitPos[100] + 1.43*goodBoardHitPos[102] + 1.1
-                diff_x = goodBoardHitPos[104] - pred_x
-            if (101 in goodBoardHitPos) and (103 in goodBoardHitPos) and (105 in goodBoardHitPos) :
-                pred_y = -0.47*goodBoardHitPos[101] + 1.45*goodBoardHitPos[103] + 0.1
-                diff_y = goodBoardHitPos[105] - pred_y           
+            if (100 in goodBoardHits) and (102 in goodBoardHits) and (104 in goodBoardHits) :
+                pred_x = -0.46*self.getHitPos(goodBoardHits[100]) + 1.43*self.getHitPos(goodBoardHits[102]) + 1.1
+                diff_x = goodBoardHits[104] - pred_x
+            if (101 in goodBoardHits) and (103 in goodBoardHits) and (105 in goodBoardHits) :
+                pred_y = -0.47*self.getHitPos(goodBoardHits[101]) + 1.45*self.getHitPos(goodBoardHits[103]) + 0.1
+                diff_y = goodBoardHits[105] - pred_y           
             if diff_x < -5 or diff_x > 5 :
                 continue
             if diff_y < -5 or diff_y > 5 :
                 continue
             #good event here
             totalTrig = totalTrig + 1
-            if testBoard in goodBoardHitPos :
+            if testBoard in goodBoardHits :
                 totalGood = totalGood + 1
 
         #results
@@ -620,6 +789,8 @@ class CSC_ANALYZE(object):
         self.analyzeData_checkTimeDist_board(103)
         self.analyzeData_checkTimeDist_board(104)
         self.analyzeData_checkTimeDist_board(105)
+        self.analyzeData_checkTimeDist_board(106)
+        self.analyzeData_checkTimeDist_board(107)
 
     def analyzeData_checkTimeDist_board(self,testBoard = None):
         if self.allTrigs == None :
@@ -642,7 +813,7 @@ class CSC_ANALYZE(object):
 
             #select good event
             isGoodEvent = True
-            reqBoards = [100,101,102,103,104,105]
+            reqBoards = self.allBoards
             for board in reqBoards :
                 #does event have hit in required layer
                 if board == testBoard :
@@ -718,6 +889,8 @@ class CSC_ANALYZE(object):
         coincPlot_103 = []
         coincPlot_104 = []
         coincPlot_105 = []
+        coincPlot_106 = []
+        coincPlot_107 = []
 
         xPlot = []
         yPlot = []
@@ -732,6 +905,8 @@ class CSC_ANALYZE(object):
         layerMap[103] = 1
         layerMap[104] = 2
         layerMap[105] = 2
+        layerMap[106] = 3
+        layerMap[107] = 3
 
         for key in self.allTrigs:
             trigNum = key
@@ -766,6 +941,14 @@ class CSC_ANALYZE(object):
                 if 105 in goodBoardHitPos and board != 105 :
                     coincPlot_105.append(board)
                     xPlot.append(105)
+                    yPlot.append(board)
+                if 106 in goodBoardHitPos and board != 106 :
+                    coincPlot_106.append(board)
+                    xPlot.append(106)
+                    yPlot.append(board)
+                if 107 in goodBoardHitPos and board != 107 :
+                    coincPlot_107.append(board)
+                    xPlot.append(107)
                     yPlot.append(board)
 
                 if ( (100 in goodBoardHitPos) or (101 in goodBoardHitPos) ) and board != 100 and board != 101 and board in layerMap:
@@ -957,7 +1140,7 @@ class CSC_ANALYZE(object):
 
             #select good event
             isGoodEvent = True
-            reqBoards = [100,101,102,103,104,105]
+            reqBoards = self.allBoards
             for board in reqBoards :
                 #does event have hit in required layer
                 if board not in goodBoardHitPos:
@@ -1027,7 +1210,9 @@ class CSC_ANALYZE(object):
         plt.xlabel("Charge (ADC)")
         plt.ylabel("Number of Hits")
 
-        plt.show()
+        #plt.show()
+        plt.plot()
+        plt.savefig("output_goodEvents_qDist.png")
 
 #END CSC_ANALYZE CLASS
 
